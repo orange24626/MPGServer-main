@@ -1,0 +1,403 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters", "relationJoins"]
+}
+
+// 运营商
+model Operator {
+  name                     String                     @unique
+  operatorID               String                     @unique
+  operatorSecret           String
+  operatorKey              String
+  lang                     String                     @default("pt")
+  currency                 String                     @default("BRL")
+  introduction             String?
+  selfOwned                Boolean                    @default(false) // 是否是自营
+  // base props
+  id                       Int                        @id @default(autoincrement())
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  rtpLevel                 Int                        @default(11)
+  version                  Int                        @default(0)
+  operatorUser             OperatorUser[]
+  Role                     Role[]
+  status                   Int                        @default(0) // 0:审批中，1:已通过，2:被暂停
+  OperatorMoneyTransaction OperatorMoneyTransaction[]
+  GamePlayer               GamePlayer[]
+}
+
+// 运营商入驻申请
+model OperatorApply {
+  username String @unique
+  password String
+  name     String @unique
+  email    String @unique
+
+  introduction String?
+  rtp          Int      @default(11)
+  lang         String   @default("pt")
+  currency     String   @default("BRL")
+  status       Int      @default(0) // 0:未处理 1:已通过 2:已拒绝
+  // base props
+  id           Int      @id @default(autoincrement())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  version      Int      @default(0)
+}
+
+// 运营商用户
+model OperatorUser {
+  accountID      String    @unique
+  gamePlayerId   String?
+  nickname       String?
+  username       String    @unique
+  mobile         String?
+  email          String?
+  password       String?
+  operatorName   String?
+  avatar         String?
+  rtpLevel       Int       @default(11)
+  isTest         Boolean   @default(false) // 是否是测试账号
+  testingExpired DateTime? // 测试账号过期时间
+  // base props
+  id             Int       @id @default(autoincrement())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  version        Int       @default(0)
+
+  // relations
+  operator   Operator     @relation(references: [id], fields: [operatorId])
+  operatorId Int
+  gamePlayer GamePlayer[]
+}
+
+enum CurrencyType {
+  CNY
+  USD
+}
+
+// 游戏玩家
+model GamePlayer {
+  nickname          String?
+  mobile            String?   @unique
+  email             String?   @unique
+  operatorName      String?
+  isTest            Boolean   @default(false) // 是否是测试账号
+  testingExpired    DateTime? // 测试账号过期时间
+  isRobot           Boolean   @default(false)
+  rtpLevel          Int       @default(11)
+  avatar            String?
+  password          String?
+  channelID         String?
+  operatorUserID    Int
+  operatorAccountID String
+  operatorUsername  String?
+  // base props
+  id                Int       @id @default(autoincrement())
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  version           Int       @default(0)
+
+  // relations
+  operatorUser OperatorUser @relation(fields: [operatorUserID], references: [id])
+  operator     Operator     @relation(references: [id], fields: [operatorId])
+  operatorId   Int
+
+  @@index([operatorId], type: Hash)
+}
+
+// 游戏玩家钱包
+model GamePlayerWallet {
+  balance        Decimal
+  // base props
+  id             Int       @id @default(autoincrement())
+  createdAt      DateTime  @default(now())
+  totalPlay      Decimal   @default(0)
+  totalWin       Decimal   @default(0)
+  totalDeposit   Decimal   @default(0)
+  totalWithdraw  Decimal   @default(0)
+  totalIn        Decimal   @default(0)
+  totalOut       Decimal   @default(0)
+  updatedAt      DateTime  @default(now()) @updatedAt
+  version        Int       @default(0)
+  isTest         Boolean   @default(false) // 是否是测试账号
+  testingExpired DateTime? // 测试账号过期时间
+  currency       String    @default("CNY")
+  // relations
+  playerId       Int
+  operatorId     Int?
+
+  @@index([playerId], type: Hash)
+  @@index([operatorId], type: Hash)
+}
+
+enum OperatorGameTransactionType {
+  Deposit
+  Withdraw
+}
+
+model OperatorMoneyTransaction {
+  id              Int      @id @default(autoincrement())
+  orderID         String //operator_order_no
+  operatorOrderID String?
+  operatorUserID  String?
+  balanceBefore   Decimal?
+  balanceAfter    Decimal?
+
+  amount     Decimal
+  type       OperatorGameTransactionType
+  note       String?
+  // base
+  createdAt  DateTime                    @default(now())
+  updatedAt  DateTime                    @updatedAt
+  version    Int                         @default(0)
+  // relations
+  operatorId Int
+  operator   Operator                    @relation(fields: [operatorId], references: [id])
+  playerId   Int?
+  walletId   Int?
+
+  @@index([orderID], type: Hash)
+  @@index([createdAt], type: Hash)
+  @@index([updatedAt], type: Hash)
+  @@index([operatorId], type: Hash)
+  @@index([playerId], type: Hash)
+  @@index([walletId], type: Hash)
+}
+
+// 管理角色等级
+enum RoleLevel {
+  Admin
+  Root
+  Operator
+}
+
+model Role {
+  name        String
+  description String
+  // base props
+  id          Int      @id @default(autoincrement())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  version     Int      @default(0)
+  permissions Json     @default("{}")
+
+  // relations
+  level      RoleLevel   @default(Admin) //如果operator有权限，就是Operator
+  operator   Operator?   @relation(fields: [operatorId], references: [id])
+  operatorId Int?
+  AdminRole  AdminRole[]
+}
+
+// 管理员
+model Admin {
+  username    String      @unique
+  password    String
+  email       String?
+  avatar      String?
+  isRoot      Boolean     @default(false)
+  // base props
+  id          Int         @id @default(autoincrement())
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  version     Int         @default(0)
+  adminRole   AdminRole[]
+  operatorIds Int[]
+}
+
+model AdminRole {
+  id        Int      @id @default(autoincrement())
+  adminId   Int
+  roleId    Int
+  // base
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  version   Int      @default(0)
+  // relations
+  admin     Admin    @relation(fields: [adminId], references: [id])
+  role      Role     @relation(fields: [roleId], references: [id])
+}
+
+// 游戏
+model Game {
+  name                    String // 应当于API路径一致
+  fullName                String
+  gameID                  Int      @unique
+  lastGameFeatureUpdateAt DateTime @default(now())
+  setting                 Json? // 游戏设置
+  // base props
+  id                      Int      @id @default(autoincrement())
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  version                 Int      @default(0)
+}
+
+enum GameHistoryStatus {
+  Ready //待结算
+  Pending //结算中
+  Success //结算成功
+  Failed //结算失败
+}
+
+model GameHistory {
+  historyId         BigInt            @unique
+  currency          String
+  fscc              Int               @default(0) // 固定未知
+  mgcc              Int               @default(0) // 固定未知
+  ge                Json //[1,4,11], [1,11],是不是特殊模式
+  gameID            Int
+  totalBet          Decimal
+  operatorId        Int
+  playerId          Int
+  profit            Decimal           @default(0)
+  moneyPoolId       Int?
+  moneyPool         Json?
+  detail            Json? // 游戏记录详情
+  isTesting         Boolean           @default(false) // 是否是测试账号
+  operatorUsername  String?
+  operatorAccountID String?
+  status            GameHistoryStatus @default(Ready)
+  balanceBefore     Decimal?
+  balanceAfter      Decimal?
+  // base
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @default(now()) @updatedAt
+  version           Int               @default(0)
+  id                Int               @id @default(autoincrement())
+
+  @@index([gameID], type: Hash)
+  @@index([createdAt], type: Hash)
+  @@index([playerId], type: Hash)
+  @@index([operatorId], type: Hash)
+  @@index([currency], type: Hash)
+  @@index([operatorId, createdAt])
+}
+
+model ConfigRTP {
+  id        Int      @id @default(autoincrement())
+  rtpNumber Int
+  gameID    Int
+  min       Decimal
+  max       Decimal
+  detail    Json
+  updatedAt DateTime @updatedAt
+
+  @@index([gameID], type: Hash)
+  @@index([rtpNumber], type: Hash)
+  @@index([gameID, rtpNumber])
+}
+
+model ConfigPlayerType {
+  id        Int      @id @default(autoincrement())
+  gameID    Int
+  type      String // A,B,C,D
+  normal    Int
+  special   Int
+  updatedAt DateTime @updatedAt
+}
+
+model ConfigThreeColumnsCardWeight {
+  id          Int      @id @default(autoincrement())
+  name        String
+  gameID      Int
+  cardID      Int
+  columnOne   Int
+  columnTwo   Int
+  columnThree Int
+  payRate     Int
+  updatedAt   DateTime @updatedAt
+
+  @@index([gameID], type: Hash)
+  @@index([cardID], type: Hash)
+  @@index([gameID, cardID])
+}
+
+model ConfigNoPrize {
+  id        Int      @id @default(autoincrement())
+  count     Int
+  gameID    Int
+  cards     Json
+  updatedAt DateTime @updatedAt
+
+  @@index([count], type: Hash)
+  @@index([gameID], type: Hash)
+  @@index([gameID, count])
+}
+
+model ConfigSpecialPrize {
+  id        Int      @id @default(autoincrement())
+  gameID    Int
+  count     Int
+  payRate   Decimal
+  rounds    Json
+  updatedAt DateTime @updatedAt
+
+  @@index([count], type: Hash)
+  @@index([gameID], type: Hash)
+  @@index([payRate], type: Hash)
+  @@index([count, gameID, payRate])
+  @@index([gameID, payRate, count])
+}
+
+model ConfigTicket {
+  id        Int      @id @default(autoincrement())
+  gameID    Int
+  amount    Float
+  rate      Float
+  updatedAt DateTime @updatedAt
+}
+
+enum SystemEventType {
+  Login // 登录
+  Register // 注册
+  GameBet // 玩家下注
+  GameWin // 玩家赢钱
+  Charge // 充值
+  Withdraw // 提现
+}
+
+// 系统日志提供大量统计数据
+model SystemEventLog {
+  id         Int             @id @default(autoincrement())
+  happenedAt DateTime        @default(now())
+  type       SystemEventType
+  isTest     Boolean         @default(false)
+  operatorId Int?
+  playerId   Int?
+  gameID     Int?
+  accountID  String?
+  balance    Decimal?
+  win        Decimal?
+  bet        Decimal?
+  charge     Decimal?
+  withdraw   Decimal?
+  betCount   Int?
+  live       Int?
+  login      Int?
+  register   Int?
+  timeLong   Int?
+  detail     Json?
+
+  @@index([operatorId], type: Hash)
+  @@index([playerId], type: Hash)
+  @@index([accountID], type: Hash)
+  @@index([gameID], type: Hash)
+  @@index([operatorId, accountID, playerId, gameID])
+  @@index([happenedAt], type: Hash)
+}
+
+model GameHistoryDailyRecord {
+  id         Int      @id @default(autoincrement())
+  day        Int
+  count      Int
+  bet        Decimal
+  profit     Decimal
+  rtp        Decimal
+  profitRate Decimal
+  updatedAt  DateTime @default(now()) @updatedAt
+}

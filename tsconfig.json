@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "esnext",
+    "jsx": "react-jsx",
+    "lib": ["ESNext"],
+    "target": "esnext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "jsxImportSource": "hono/jsx",
+    "allowJs": true,
+    "baseUrl": "./src",
+    "types": [
+      "bun-types" // add Bun global
+    ],
+    "paths": {
+      "bun-types": ["../node_modules/bun-types/index.d.ts"]
+    }
+  },
+  "exclude": [
+    "./node_modules/",
+    "./public/",
+    "./scripts/",
+  ]
+}
